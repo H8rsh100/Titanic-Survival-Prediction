@@ -12,133 +12,140 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Function to encode local image to base64 for CSS background
-def get_base64_of_bin_file(bin_file):
-    with open(bin_file, 'rb') as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
+# Helper function to convert background image to base64
+def get_base64_of_file(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
 
-# Inject Atmospheric CSS
-st.markdown("""
+hero_bg_b64 = get_base64_of_file("assets/titanic_hero.png")
+
+# Faded Titanic Background CSS
+bg_style = f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap');
 
-    .stApp {
-        background: radial-gradient(circle at 50% 20%, #0e2338 0%, #071322 50%, #030810 100%);
+    .stApp {{
+        background: 
+            linear-gradient(180deg, rgba(5, 12, 24, 0.88) 0%, rgba(3, 8, 16, 0.96) 100%),
+            url("data:image/png;base64,{hero_bg_b64}") no-repeat center top fixed;
+        background-size: cover;
         color: #e2e8f0;
         font-family: 'Inter', sans-serif;
-    }
+    }}
     
-    /* Hero Banner Styling */
-    .hero-container {
-        position: relative;
-        background: linear-gradient(180deg, rgba(7, 19, 34, 0.4) 0%, rgba(3, 8, 16, 0.95) 100%);
+    /* Hero Title Card */
+    .hero-card {{
+        background: rgba(11, 23, 42, 0.65);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(212, 175, 55, 0.35);
         border-radius: 16px;
-        padding: 2.5rem 2rem;
+        padding: 2rem 2.5rem;
         margin-bottom: 2rem;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 0 30px rgba(0, 229, 255, 0.05);
-        overflow: hidden;
-    }
-    .hero-title {
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
+    }}
+    .hero-title {{
         font-family: 'Cinzel', serif;
-        font-size: 3rem;
+        font-size: 2.8rem;
         font-weight: 900;
         letter-spacing: 3px;
-        background: linear-gradient(135deg, #FFF 0%, #D4AF37 50%, #00E5FF 100%);
+        background: linear-gradient(135deg, #FFFFFF 0%, #D4AF37 50%, #00E5FF 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-transform: uppercase;
         margin: 0;
-        text-shadow: 0 10px 30px rgba(0, 229, 255, 0.2);
-    }
-    .hero-subtitle {
+    }}
+    .hero-subtitle {{
         font-family: 'Cinzel', serif;
-        font-size: 1.15rem;
+        font-size: 1.05rem;
         color: #94a3b8;
         letter-spacing: 2px;
-        margin-top: 0.5rem;
-    }
-    .gold-badge {
+        margin-top: 0.4rem;
+    }}
+    .gold-badge {{
         display: inline-block;
         background: rgba(212, 175, 55, 0.15);
         border: 1px solid #D4AF37;
         color: #F1C40F;
-        padding: 0.25rem 0.85rem;
+        padding: 0.2rem 0.75rem;
         border-radius: 20px;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 700;
         letter-spacing: 1.5px;
         text-transform: uppercase;
-        margin-bottom: 1rem;
-    }
+        margin-bottom: 0.8rem;
+    }}
 
-    /* Ticket Container */
-    .ticket-card {
-        background: rgba(13, 27, 46, 0.75);
+    /* Manifest Ticket Card */
+    .ticket-card {{
+        background: rgba(11, 23, 42, 0.75);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border: 1px solid rgba(212, 175, 55, 0.25);
         border-radius: 16px;
-        padding: 2rem;
+        padding: 1.8rem;
         box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
         margin-bottom: 1.5rem;
-    }
-    .ticket-header {
+    }}
+    .ticket-header {{
         font-family: 'Cinzel', serif;
-        font-size: 1.4rem;
+        font-size: 1.3rem;
         color: #D4AF37;
         letter-spacing: 1.5px;
         border-bottom: 1px dashed rgba(212, 175, 55, 0.3);
         padding-bottom: 0.75rem;
-        margin-bottom: 1.5rem;
-    }
+        margin-bottom: 1.25rem;
+    }}
     
-    /* Result Cards */
-    .result-survived {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 78, 59, 0.4) 100%);
+    /* Result Displays */
+    .result-survived {{
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(6, 78, 59, 0.5) 100%);
         border: 2px solid #10B981;
         border-radius: 14px;
         padding: 1.5rem;
         text-align: center;
-        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.2);
-    }
-    .result-perished {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(127, 29, 29, 0.4) 100%);
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.25);
+    }}
+    .result-perished {{
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(127, 29, 29, 0.5) 100%);
         border: 2px solid #EF4444;
         border-radius: 14px;
         padding: 1.5rem;
         text-align: center;
-        box-shadow: 0 10px 30px rgba(239, 68, 68, 0.2);
-    }
-    .result-title {
+        box-shadow: 0 10px 30px rgba(239, 68, 68, 0.25);
+    }}
+    .result-title {{
         font-family: 'Cinzel', serif;
-        font-size: 2rem;
+        font-size: 1.8rem;
         font-weight: 700;
         margin: 0;
-    }
+    }}
 
     /* Metric Badges */
-    .metric-badge {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid rgba(0, 229, 255, 0.3);
+    .metric-badge {{
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(0, 229, 255, 0.35);
         border-radius: 12px;
-        padding: 1rem;
+        padding: 0.85rem;
         text-align: center;
-    }
-    .metric-val {
-        font-size: 1.8rem;
+    }}
+    .metric-val {{
+        font-size: 1.6rem;
         font-weight: 800;
         color: #00E5FF;
-    }
-    .metric-lbl {
-        font-size: 0.8rem;
+    }}
+    .metric-lbl {{
+        font-size: 0.75rem;
         color: #94a3b8;
         text-transform: uppercase;
         letter-spacing: 1px;
-    }
+    }}
 </style>
-""", unsafe_allow_html=True)
+"""
+
+st.markdown(bg_style, unsafe_allow_html=True)
 
 @st.cache_resource
 def load_pipeline():
@@ -150,17 +157,14 @@ def load_pipeline():
 
 model, feature_names = load_pipeline()
 
-# Hero Banner Section
+# Hero Header Card
 st.markdown("""
-<div class="hero-container">
+<div class="hero-card">
     <div class="gold-badge">⚓ White Star Line • RMS Titanic Command Center</div>
     <h1 class="hero-title">Titanic Survival Simulator</h1>
     <div class="hero-subtitle">1912 Evacuation Risk Analytics & AI Telemetry Engine</div>
 </div>
 """, unsafe_allow_html=True)
-
-if os.path.exists("assets/titanic_hero.png"):
-    st.image("assets/titanic_hero.png", use_container_width=True)
 
 if model is None:
     st.error("⚠️ Trained ML model artifact not found. Please run `python src/train.py` first!")
@@ -228,6 +232,8 @@ with tabs[0]:
         st.markdown("---")
         res_col1, res_col2 = st.columns([1.2, 2])
         
+        pclass_ordinal = {1: "1st", 2: "2nd", 3: "3rd"}.get(pclass, f"{pclass}th")
+        
         with res_col1:
             if pred == 1:
                 st.markdown(f"""
@@ -253,7 +259,7 @@ with tabs[0]:
             
             m1, m2, m3 = st.columns(3)
             with m1:
-                st.markdown(f'<div class="metric-badge"><div class="metric-val">{pclass}st Class</div><div class="metric-lbl">Deck Level Access</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-badge"><div class="metric-val">{pclass_ordinal} Class</div><div class="metric-lbl">Deck Level Access</div></div>', unsafe_allow_html=True)
             with m2:
                 st.markdown(f'<div class="metric-badge"><div class="metric-val">{sex.title()}</div><div class="metric-lbl">Evacuation Priority</div></div>', unsafe_allow_html=True)
             with m3:
@@ -274,16 +280,16 @@ with tabs[1]:
     
     col_img1, col_img2 = st.columns(2)
     with col_img1:
-        if os.path.exists("assets/iceberg.png"):
-            st.image("assets/iceberg.png", caption="North Atlantic Oceanic Environment")
         if os.path.exists("reports/figures/cv_model_comparison.png"):
             st.image("reports/figures/cv_model_comparison.png", caption="5-Fold Stratified Cross-Validation Benchmark")
+        if os.path.exists("reports/figures/confusion_matrix.png"):
+            st.image("reports/figures/confusion_matrix.png", caption="Confusion Matrix — Soft Voting Ensemble")
             
     with col_img2:
         if os.path.exists("reports/figures/feature_importance.png"):
             st.image("reports/figures/feature_importance.png", caption="Top Feature Importances (Tree Ensemble)")
-        if os.path.exists("reports/figures/confusion_matrix.png"):
-            st.image("reports/figures/confusion_matrix.png", caption="Confusion Matrix — Soft Voting Ensemble")
+        if os.path.exists("reports/figures/survival_by_sex_pclass.png"):
+            st.image("reports/figures/survival_by_sex_pclass.png", caption="Survival Rate by Class & Gender")
 
 with tabs[2]:
     st.markdown("### 📜 System Architecture & Technical Specifications")

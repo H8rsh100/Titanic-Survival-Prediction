@@ -280,16 +280,16 @@ with tabs[1]:
     
     col_img1, col_img2 = st.columns(2)
     with col_img1:
+        if os.path.exists("assets/iceberg.png"):
+            st.image("assets/iceberg.png", caption="North Atlantic Oceanic Environment")
         if os.path.exists("reports/figures/cv_model_comparison.png"):
             st.image("reports/figures/cv_model_comparison.png", caption="5-Fold Stratified Cross-Validation Benchmark")
-        if os.path.exists("reports/figures/confusion_matrix.png"):
-            st.image("reports/figures/confusion_matrix.png", caption="Confusion Matrix — Soft Voting Ensemble")
             
     with col_img2:
         if os.path.exists("reports/figures/feature_importance.png"):
             st.image("reports/figures/feature_importance.png", caption="Top Feature Importances (Tree Ensemble)")
-        if os.path.exists("reports/figures/survival_by_sex_pclass.png"):
-            st.image("reports/figures/survival_by_sex_pclass.png", caption="Survival Rate by Class & Gender")
+        if os.path.exists("reports/figures/confusion_matrix.png"):
+            st.image("reports/figures/confusion_matrix.png", caption="Confusion Matrix — Soft Voting Ensemble")
 
 with tabs[2]:
     st.markdown("### 📜 System Architecture & Technical Specifications")

@@ -103,11 +103,11 @@ streamlit run app.py
 
 The most influential predictors identified by the ensemble model:
 
-1. **Title (Mr / Miss / Mrs / Master)** — Strongest indicator of rescue prioritization.
-2. **Sex (Female vs Male)** — Reflects historical "women and children first" maritime evacuation protocol.
-3. **Pclass (Passenger Class)** — Socioeconomic status directly affected access to upper boat decks.
-4. **Fare / Fare_Log** — Ticket cost correlates strongly with cabin deck proximity.
-5. **FamilySize / IsAlone** — Large families faced coordination challenges during evacuation.
+1. **Title (Mr / Miss / Mrs / Master)** - Strongest indicator of rescue prioritization.
+2. **Sex (Female vs Male)** - Reflects historical "women and children first" maritime evacuation protocol.
+3. **Pclass (Passenger Class)** - Socioeconomic status directly affected access to upper boat decks.
+4. **Fare / Fare_Log** - Ticket cost correlates strongly with cabin deck proximity.
+5. **FamilySize / IsAlone** - Large families faced coordination challenges during evacuation.
 
 ---
 

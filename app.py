@@ -1,9 +1,14 @@
 import os
 import base64
+import sys
 import joblib
 import pandas as pd
 import numpy as np
 import streamlit as st
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+
+from features import build_passenger_record
 
 st.set_page_config(
     page_title="RMS Titanic — Survival Command & Telemetry Engine",
@@ -192,42 +197,31 @@ with tabs[0]:
     with col3:
         embarked = st.selectbox("⚓ Port of Embarkation", options=["S (Southampton)", "C (Cherbourg)", "Q (Queenstown)"], index=0)
         embarked_code = embarked.split(" ")[0]
-        has_cabin = st.selectbox("🔑 Recorded Cabin Assigned?", options=["No", "Yes"], index=0)
-        deck = st.selectbox("⛵ Cabin Deck Level", options=["U (Unknown/Steerage)", "A", "B", "C", "D", "E", "F", "G"], index=0)
-        deck_code = deck.split(" ")[0]
+        cabin = st.text_input("🔑 Recorded Cabin (blank if none)", value="", placeholder="e.g. C85")
+        cabin = cabin.strip() or None
 
     st.markdown('</div>', unsafe_allow_html=True)
     
     if st.button("🚨 SIMULATE RESCUE SURVIVAL PROBABILITY", use_container_width=True):
-        family_size = sibsp + parch + 1
-        is_alone = 1 if family_size == 1 else 0
-        small_fam = 1 if 2 <= family_size <= 4 else 0
-        large_fam = 1 if family_size > 4 else 0
-        fare_log = np.log1p(fare)
-        
-        sample_dict = {f: 0 for f in feature_names}
-        
-        if 'Pclass' in sample_dict: sample_dict['Pclass'] = pclass
-        if 'Age' in sample_dict: sample_dict['Age'] = age
-        if 'SibSp' in sample_dict: sample_dict['SibSp'] = sibsp
-        if 'Parch' in sample_dict: sample_dict['Parch'] = parch
-        if 'Fare' in sample_dict: sample_dict['Fare'] = fare
-        if 'FamilySize' in sample_dict: sample_dict['FamilySize'] = family_size
-        if 'IsAlone' in sample_dict: sample_dict['IsAlone'] = is_alone
-        if 'SmallFamily' in sample_dict: sample_dict['SmallFamily'] = small_fam
-        if 'LargeFamily' in sample_dict: sample_dict['LargeFamily'] = large_fam
-        if 'HasCabin' in sample_dict: sample_dict['HasCabin'] = 1 if has_cabin == "Yes" else 0
-        if 'Fare_Log' in sample_dict: sample_dict['Fare_Log'] = fare_log
-        
-        if f'Sex_{sex}' in sample_dict: sample_dict[f'Sex_{sex}'] = 1
-        if f'Embarked_{embarked_code}' in sample_dict: sample_dict[f'Embarked_{embarked_code}'] = 1
-        if f'Title_{title}' in sample_dict: sample_dict[f'Title_{title}'] = 1
-        if f'Deck_{deck_code}' in sample_dict: sample_dict[f'Deck_{deck_code}'] = 1
-        
-        input_df = pd.DataFrame([sample_dict])[feature_names]
+        input_df, engineered = build_passenger_record(
+            feature_names,
+            pclass=pclass,
+            sex=sex,
+            age=float(age),
+            title=title,
+            sibsp=int(sibsp),
+            parch=int(parch),
+            fare=float(fare),
+            embarked=embarked_code,
+            cabin=cabin,
+        )
         
         prob = model.predict_proba(input_df)[0][1]
         pred = model.predict(input_df)[0]
+        family_size = int(engineered["FamilySize"].iloc[0])
+        deck = str(engineered["Deck"].iloc[0])
+        age_group = str(engineered["AgeGroup"].iloc[0])
+        has_cabin = int(engineered["HasCabin"].iloc[0])
         
         st.markdown("---")
         res_col1, res_col2 = st.columns([1.2, 2])
@@ -267,6 +261,11 @@ with tabs[0]:
                 
             st.markdown("<br>", unsafe_allow_html=True)
             st.progress(float(prob))
+            
+            st.caption(
+                f"Encoded context: AgeGroup '{age_group}', Deck '{deck}', "
+                f"HasCabin {has_cabin}, Title '{title}', Embarked '{embarked_code}'."
+            )
             
             if sex == "female":
                 st.info("💡 **Evacuation Protocol**: Maritime 'Women & Children First' protocol significantly boosted survival probability for female passengers.")

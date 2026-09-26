@@ -1,0 +1,38 @@
+{
+  "selected_model": "Voting Classifier Ensemble",
+  "cv_mean_accuracy": 0.8417174063147324,
+  "cv_std_accuracy": 0.020740842763860613,
+  "oof_metrics": {
+    "Accuracy": 0.8417508417508418,
+    "Precision": 0.8170347003154574,
+    "Recall": 0.7573099415204678,
+    "F1-Score": 0.7860394537177542,
+    "ROC-AUC": 0.8778028100001064
+  },
+  "resubstitution_metrics": {
+    "Accuracy": 0.8911335578002245,
+    "Precision": 0.886435331230284,
+    "Recall": 0.8216374269005848,
+    "F1-Score": 0.8528072837632777
+  },
+  "candidates": {
+    "random_forest": {
+      "cv_score": 0.8349946644906158,
+      "params": {
+        "max_depth": 8,
+        "min_samples_split": 5,
+        "n_estimators": 200
+      }
+    },
+    "gradient_boosting": {
+      "cv_score": 0.8405938108091144,
+      "params": {
+        "learning_rate": 0.1,
+        "max_depth": 3,
+        "n_estimators": 150
+      }
+    }
+  },
+  "n_train": 891,
+  "n_test": 418
+}

@@ -1,6 +1,15 @@
 import pandas as pd
 import numpy as np
 
+CATEGORICAL_COLUMNS = ['Sex', 'Embarked', 'Title', 'Deck', 'AgeGroup']
+
+# Columns that are dropped before the one-hot step and never reach the model.
+RAW_DROP_COLUMNS = ['PassengerId', 'Name', 'Ticket', 'Cabin', 'Survived']
+
+
+class FeatureSchemaMismatch(ValueError):
+    """Raised when a feature matrix cannot be reconciled with a model's contract."""
+
 def extract_features(df):
     """
     Extract domain-specific engineered features from raw Titanic passenger records.
@@ -53,12 +62,12 @@ def prepare_modeling_data(train_df, test_df):
     test_ids = test_eng['PassengerId'].values
     
     # Drop identifier & text columns
-    drop_cols = ['PassengerId', 'Name', 'Ticket', 'Cabin', 'Survived']
+    drop_cols = RAW_DROP_COLUMNS
     train_features = train_eng.drop(columns=[c for c in drop_cols if c in train_eng.columns])
     test_features = test_eng.drop(columns=[c for c in drop_cols if c in test_eng.columns])
     
     # Categorical One-Hot Encoding
-    cat_cols = ['Sex', 'Embarked', 'Title', 'Deck', 'AgeGroup']
+    cat_cols = CATEGORICAL_COLUMNS
     
     combined = pd.concat([train_features, test_features], axis=0)
     combined_encoded = pd.get_dummies(combined, columns=cat_cols, drop_first=True)
@@ -67,6 +76,50 @@ def prepare_modeling_data(train_df, test_df):
     X_test = combined_encoded.iloc[len(train_df):].copy()
     
     return X_train, y_train, X_test, train_ids, test_ids, train_eng, test_eng
+
+
+def _is_dummy_column(column):
+    """Return True when the column looks like a one-hot of a known categorical."""
+    return any(
+        column.startswith(f"{cat}_") or column == f"{cat}"
+        for cat in CATEGORICAL_COLUMNS
+    )
+
+
+def align_to_schema(X, feature_names, strict=True):
+    """
+    Reconcile a feature matrix with the column contract recorded in a model artifact.
+
+    One-hot columns are derived from observed categories, so a matrix built from a
+    different slice of data can be missing indicator columns that the model still
+    expects. Absent dummy columns are safe to fill with 0 (the category simply did
+    not occur); a missing numeric column is a real defect and raises instead.
+
+    Returns
+    -------
+    aligned : pd.DataFrame
+        Matrix with exactly ``feature_names`` columns, in that order.
+    missing : list[str]
+        Dummy columns that were filled with zeros.
+    extra : list[str]
+        Columns present in ``X`` but absent from the contract (dropped).
+    """
+    feature_names = list(feature_names)
+    missing = [name for name in feature_names if name not in X.columns]
+    extra = [column for column in X.columns if column not in feature_names]
+
+    unrecoverable = [name for name in missing if not _is_dummy_column(name)]
+    if unrecoverable and strict:
+        raise FeatureSchemaMismatch(
+            "Feature matrix is missing required non-encoded columns: "
+            f"{unrecoverable}. Refit the pipeline or align the training schema."
+        )
+
+    aligned = X.reindex(columns=feature_names)
+    for name in missing:
+        aligned[name] = aligned[name].fillna(0)
+
+    return aligned, missing, extra
 
 if __name__ == "__main__":
     from data_prep import load_data, impute_missing

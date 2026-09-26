@@ -19,7 +19,7 @@ An end-to-end Machine Learning pipeline and interactive AI simulator predicting 
   - **Log-Transformed Fare**: Addressed severe right-skewness in ticket prices using $\log(1 + \text{Fare})$.
 - 🛡️ **Leakage-Free Imputation**: Imputed missing `Age` values conditionally using median grouped by `Pclass` and `Title` computed strictly on training folds.
 - 📊 **Stratified 5-Fold CV Benchmark**: Benchmarked Logistic Regression, Random Forest, Gradient Boosting, Extra Trees, Support Vector Classifier, and Ensembles.
-- 🔮 **Interactive Web Simulator (`app.py`)**: Built-in Streamlit web application providing real-time survival probability calculations and visual explanations.
+- 🔮 **Interactive Web Simulator (`app.py`)**: Built-in Streamlit web application providing real-time survival probability calculations and visual explanations. The simulator encodes passengers through the exact same `src/features.py` code path as training, so its probabilities cannot drift from the model.
 
 ---
 

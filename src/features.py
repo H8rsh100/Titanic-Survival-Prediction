@@ -3,6 +3,19 @@ import numpy as np
 
 CATEGORICAL_COLUMNS = ['Sex', 'Embarked', 'Title', 'Deck', 'AgeGroup']
 
+# Full category universe for each encoded column, in the order pd.get_dummies
+# produces with drop_first=True. The FIRST level is the dropped reference
+# category, every subsequent level becomes a `{column}_{level}` dummy.
+# These are domain-stable (a deck is a letter A-G, a title collapses to five
+# groups), so the same universe holds for single-row scoring.
+FEATURE_CATEGORIES = {
+    'Sex': ('female', 'male'),
+    'Embarked': ('C', 'Q', 'S'),
+    'Title': ('Master', 'Miss', 'Mr', 'Mrs', 'Rare'),
+    'Deck': ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'U'),
+    'AgeGroup': ('Child', 'Teen', 'YoungAdult', 'Adult', 'Senior'),
+}
+
 # Columns that are dropped before the one-hot step and never reach the model.
 RAW_DROP_COLUMNS = ['PassengerId', 'Name', 'Ticket', 'Cabin', 'Survived']
 
@@ -34,8 +47,12 @@ def extract_features(df):
     df['LargeFamily'] = (df['FamilySize'] > 4).astype(int)
     
     # 3. Cabin & Deck Features
-    df['HasCabin'] = df['Cabin'].notnull().astype(int)
-    df['Deck'] = df['Cabin'].fillna('U').apply(lambda x: str(x)[0].upper())
+    # Normalise blank/whitespace-only cabin labels to "no cabin recorded" so that
+    # str[0] below can never index into an empty string.
+    cabin = df['Cabin'].astype('string').str.strip()
+    has_cabin = (cabin.notna()) & (cabin.str.len() > 0)
+    df['HasCabin'] = has_cabin.astype(int)
+    df['Deck'] = cabin.where(has_cabin, 'U').str[0].str.upper().astype(object)
     df['Deck'] = df['Deck'].replace(['T'], 'U')  # Group ultra-rare deck T with U
     
     # 4. Age Binning
@@ -120,6 +137,94 @@ def align_to_schema(X, feature_names, strict=True):
         aligned[name] = aligned[name].fillna(0)
 
     return aligned, missing, extra
+
+
+def encode_single_record(record_df):
+    """
+    One-hot encode a one-row engineered frame against the full category universe.
+
+    ``pd.get_dummies(..., drop_first=True)`` derives its columns from the
+    categories present in the data. On a single row that leaves exactly one
+    category, which drop_first then discards, so every dummy for that column
+    comes out zero. Scoring one passenger would therefore erase the signal
+    entirely (a "male" and a "female" record would encode identically).
+    Encoding against the explicit universe instead keeps the reference category
+    all-zero and sets the one matching dummy.
+    """
+    if len(record_df) != 1:
+        raise ValueError(f"encode_single_record expects exactly 1 row, got {len(record_df)}")
+
+    encoded = {}
+    for column in record_df.columns:
+        value = record_df[column].iloc[0]
+        if column in CATEGORICAL_COLUMNS:
+            value = str(value)
+            for level in FEATURE_CATEGORIES[column][1:]:
+                encoded[f"{column}_{level}"] = 1 if value == level else 0
+        else:
+            encoded[column] = value
+
+    return pd.DataFrame([encoded])
+
+
+# Representative name token used to synthesise a Name for each title group.
+_TITLE_NAME_TOKEN = {'Mr': 'Mr', 'Mrs': 'Mrs', 'Miss': 'Miss', 'Master': 'Master', 'Rare': 'Sir'}
+
+
+def build_passenger_record(feature_names, pclass=3, sex='male', age=28.0, title='Mr',
+                           sibsp=0, parch=0, fare=32.2, embarked='S', cabin=None):
+    """
+    Build a single engineered, one-hot encoded passenger row for ad-hoc scoring.
+
+    The interactive simulator used to hand-assemble the feature vector, which
+    silently skipped the ``AgeGroup`` dummies and allowed impossible combinations
+    such as ``HasCabin=0`` paired with a named deck. Routing through
+    ``extract_features`` makes the simulator produce exactly the same encoding the
+    model was trained on.
+
+    Parameters
+    ----------
+    feature_names : sequence of str
+        Column contract recorded in the model artifact.
+    cabin : str or None
+        Cabin label. ``None`` means no cabin was recorded, which yields
+        ``HasCabin=0`` and ``Deck='U'`` by construction.
+
+    Returns
+    -------
+    aligned : pd.DataFrame
+        One-row matrix matching ``feature_names``.
+    engineered : pd.DataFrame
+        One-row human readable engineered frame (useful for display/debugging).
+    """
+    if title not in _TITLE_NAME_TOKEN:
+        raise ValueError(
+            f"Unsupported title '{title}'. Expected one of {sorted(_TITLE_NAME_TOKEN)}."
+        )
+    if embarked not in ('S', 'C', 'Q'):
+        raise ValueError(f"Unsupported embarkation port '{embarked}'. Expected S, C or Q.")
+
+    raw = pd.DataFrame([{
+        'PassengerId': 0,
+        'Survived': 0,
+        'Pclass': pclass,
+        'Name': f"Simulated, {_TITLE_NAME_TOKEN[title]}. Passenger",
+        'Sex': sex,
+        'Age': age,
+        'SibSp': sibsp,
+        'Parch': parch,
+        'Ticket': 'SIM-000',
+        'Fare': fare,
+        'Cabin': cabin,
+        'Embarked': embarked,
+    }])
+
+    engineered = extract_features(raw)
+    record = engineered.drop(columns=[c for c in RAW_DROP_COLUMNS if c in engineered.columns])
+    encoded = encode_single_record(record)
+    aligned, _, _ = align_to_schema(encoded, feature_names)
+
+    return aligned, engineered
 
 if __name__ == "__main__":
     from data_prep import load_data, impute_missing

@@ -5,6 +5,12 @@ import sys
 
 import pytest
 
+# Force a headless plotting backend. Without this, figure tests intermittently
+# fail on machines where matplotlib auto-selects TkAgg and no display is available.
+import matplotlib
+
+matplotlib.use("Agg")
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(REPO_ROOT, "src")
 DATA_RAW_DIR = os.path.join(REPO_ROOT, "data", "raw")

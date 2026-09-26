@@ -54,6 +54,12 @@ titanic-survival-prediction/
 │   ├── train.py            # Stratified K-Fold CV, hyperparameter tuning & saving
 │   ├── evaluate.py         # Metric calculation & figure visualization
 │   └── predict.py          # Kaggle submission CSV generator
+├── tests/                  # Pytest suite covering data, features, model & submission
+│   ├── conftest.py
+│   ├── test_data_prep.py
+│   ├── test_features.py
+│   ├── test_model_artifact.py
+│   └── test_submission.py
 ├── models/
 │   └── best_model.pkl      # Saved trained Soft Voting Classifier
 ├── reports/
@@ -62,9 +68,14 @@ titanic-survival-prediction/
 │       ├── feature_importance.png
 │       ├── confusion_matrix.png
 │       └── survival_by_sex_pclass.png
+├── .github/
+│   └── workflows/
+│       └── ci.yml          # Automated test + import check on every push
 ├── app.py                  # Streamlit Interactive Survival Simulator App
 ├── submission.csv          # Kaggle-ready submission file (418 test records)
 ├── requirements.txt        # Python package dependencies
+├── requirements-dev.txt    # Test/CI-only dependencies
+├── pytest.ini              # Pytest configuration
 ├── README.md               # Project documentation
 └── .gitignore
 ```
@@ -96,6 +107,24 @@ This produces `submission.csv` containing binary survival predictions formatted 
 ```bash
 streamlit run app.py
 ```
+
+### 5. Run the Test Suite
+The repo ships with a `pytest` suite that pins the data contract (row counts, no residual nulls, engineered feature semantics), the model artifact interface, and the Kaggle submission format.
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest
+```
+
+Tests that depend on generated artifacts (`models/best_model.pkl`, `submission.csv`) skip cleanly when those files are absent, so the suite is safe to run on a fresh clone.
+
+| Test module | What it protects |
+| :--- | :--- |
+| `tests/test_data_prep.py` | Loader shape/column contract, imputation rules, and that imputation never mutates the source frames |
+| `tests/test_features.py` | Title collapsing, family bucket exclusivity, deck extraction, age binning, and one-hot encoding integrity |
+| `tests/test_model_artifact.py` | Artifact keys, feature contract alignment, probability sanity, and baseline beat |
+| `tests/test_submission.py` | Exact Kaggle column contract, row count, binary output, and PassengerId ordering |
+
+A GitHub Actions workflow (`.github/workflows/ci.yml`) runs the suite plus a module import check on every push and pull request to `main`.
 
 ---
 

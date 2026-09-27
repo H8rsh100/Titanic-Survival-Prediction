@@ -14,7 +14,7 @@ from reports import available_figures, format_metric_rows, load_cv_results, load
 from manifest import (
     prepare_manifest, score_manifest, summarise_predictions, validate_manifest
 )
-from explain import feature_drivers, nearest_passengers
+from explain import feature_drivers, nearest_passengers, render_gauge, verdict_class
 from sensitivity import SWEEPS, sensitivity_curve
 
 
@@ -155,6 +155,111 @@ bg_style = f"""
         text-transform: uppercase;
         letter-spacing: 1px;
     }}
+
+    /* Survival Gauge */
+    .gauge-wrap {{
+        display: flex;
+        justify-content: center;
+        margin: 0.4rem 0 0.9rem 0;
+    }}
+    .gauge {{
+        position: relative;
+        width: 236px;
+        height: 118px;
+        overflow: hidden;
+    }}
+    .gauge-track {{
+        width: 236px;
+        height: 236px;
+        border-radius: 50%;
+        background: conic-gradient(from 270deg, #ff4d6d 0deg, #ffb020 150deg, #00e5ff 210deg, #00e5ff 360deg);
+        -webkit-mask: radial-gradient(farthest-side, transparent 61%, #000 62%);
+        mask: radial-gradient(farthest-side, transparent 61%, #000 62%);
+    }}
+    .gauge-needle {{
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 100px;
+        height: 4px;
+        margin-top: -2px;
+        border-radius: 4px;
+        background: #e2e8f0;
+        transform-origin: 0 50%;
+        transform: rotate(0deg);
+        transition: transform 420ms cubic-bezier(0.4, 0.0, 0.2, 1);
+        box-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
+    }}
+    .gauge-pin {{
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 15px;
+        height: 15px;
+        margin: -7.5px 0 0 -7.5px;
+        border-radius: 50%;
+        background: #e2e8f0;
+        border: 3px solid #0f172a;
+    }}
+    .gauge-readout {{
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 4px;
+        text-align: center;
+        font-size: 1.7rem;
+        font-weight: 800;
+        color: #00e5ff;
+    }}
+
+    /* Verdict Card */
+    .verdict {{
+        border-radius: 12px;
+        padding: 0.9rem 1.1rem;
+        text-align: center;
+        font-weight: 700;
+        font-size: 1.05rem;
+        margin-top: 0.3rem;
+        border: 1px solid transparent;
+    }}
+    .verdict-safe {{
+        background: rgba(0, 229, 255, 0.12);
+        border-color: rgba(0, 229, 255, 0.5);
+        color: #67e8f9;
+    }}
+    .verdict-risky {{
+        background: rgba(255, 77, 109, 0.12);
+        border-color: rgba(255, 77, 109, 0.5);
+        color: #fda4af;
+    }}
+
+    /* Light theme overrides so the custom cards stay readable */
+    @media (prefers-color-scheme: light) {{
+        .metric-badge {{
+            background: rgba(15, 23, 42, 0.04);
+            border-color: rgba(2, 132, 199, 0.35);
+        }}
+        .metric-val {{ color: #0369a1; }}
+        .metric-lbl {{ color: #475569; }}
+        .gauge-needle {{ background: #0f172a; box-shadow: 0 0 8px rgba(2, 132, 199, 0.5); }}
+        .gauge-pin {{ background: #0f172a; border-color: #f8fafc; }}
+        .gauge-readout {{ color: #0369a1; }}
+        .verdict-safe {{
+            background: rgba(2, 132, 199, 0.1);
+            border-color: rgba(2, 132, 199, 0.4);
+            color: #075985;
+        }}
+        .verdict-risky {{
+            background: rgba(225, 29, 72, 0.08);
+            border-color: rgba(225, 29, 72, 0.35);
+            color: #9f1239;
+        }}
+    }}
+
+    /* Respect users who prefer reduced motion */
+    @media (prefers-reduced-motion: reduce) {{
+        .gauge-needle {{ transition: none; }}
+    }}
 </style>
 """
 
@@ -186,8 +291,9 @@ st.markdown("""
     <div class="gold-badge">⚓ White Star Line • RMS Titanic Command Center</div>
     <h1 class="hero-title">Titanic Survival Simulator</h1>
     <div class="hero-subtitle">1912 Evacuation Risk Analytics & AI Telemetry Engine</div>
-</div>
-""", unsafe_allow_html=True)
+                </div>
+                """, unsafe_allow_html=True)
+
 
 if model is None:
     st.error("⚠️ Trained ML model artifact not found. Please run `python src/train.py` first!")
@@ -283,6 +389,14 @@ with tabs[0]:
                     <span style="font-size: 0.8rem; color: #f87171;">Calculated Survival Likelihood</span>
                 </div>
                 """, unsafe_allow_html=True)
+
+            st.markdown(render_gauge(prob), unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="verdict {verdict_class(prob)}">'
+                f"{'Lifeboat priority secured' if pred == 1 else 'Lifeboat deficit'}"
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
         with res_col2:
             st.markdown("### 📊 Key Telemetry Factors & Decision Drivers")

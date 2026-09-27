@@ -109,6 +109,32 @@ def _display_name(column):
     return text
 
 
+def render_gauge(probability):
+    """
+    Half-dial survival gauge.
+
+    The needle sweeps 180 degrees from red to cyan, matching the conic gradient
+    used by the CSS, so the colour and the pointer always agree. An inline
+    transform is used rather than a generated stylesheet so the dial works with
+    the single global style block.
+    """
+    pct = max(0.0, min(1.0, float(probability)))
+    angle = pct * 180.0
+    return (
+        '<div class="gauge-wrap"><div class="gauge">'
+        '<div class="gauge-track"></div>'
+        f'<div class="gauge-needle" style="transform: rotate({angle:.1f}deg);"></div>'
+        '<div class="gauge-pin"></div>'
+        f'<div class="gauge-readout">{pct:.1%}</div>'
+        "</div></div>"
+    )
+
+
+def verdict_class(probability, threshold=0.5):
+    """CSS class for the verdict banner, resolved centrally so tests can pin it."""
+    return "verdict-safe" if float(probability) >= threshold else "verdict-risky"
+
+
 def nearest_passengers(X_train, y_train, engineered, X_row, k=8):
     """
     Find the k training passengers closest to this one.

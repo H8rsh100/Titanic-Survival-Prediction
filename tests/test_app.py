@@ -32,7 +32,7 @@ class TestAppLoads:
         assert not app.exception, [e.value for e in app.exception]
 
     def test_hero_and_tabs_render(self, app):
-        assert len(app.tabs) == 3
+        assert len(app.tabs) == 4
         body = " ".join(m.value for m in app.markdown)
         assert "Titanic Survival Simulator" in body
 
@@ -100,6 +100,52 @@ class TestSimulationFlow:
         at.text_input[0].set_value("C85").run()
         at.button[0].click().run()
         assert not at.exception
+
+
+class TestBatchManifestTab:
+    def test_tab_offers_a_manifest_source_choice(self, app):
+        at = AppTest.from_file(APP_PATH, default_timeout=180)
+        at.run()
+        assert len(at.radio) >= 1
+        assert "Kaggle test set" in at.radio[0].options[0]
+
+    def test_bundled_manifest_is_accepted(self, app):
+        at = AppTest.from_file(APP_PATH, default_timeout=180)
+        at.run()
+        assert any("418" in s.value for s in at.success)
+
+    def test_scoring_the_manifest_produces_a_table(self, app):
+        at = AppTest.from_file(APP_PATH, default_timeout=180)
+        at.run()
+        labels = [b.label for b in at.button]
+        target = next((i for i, lab in enumerate(labels) if "SCORE ENTIRE MANIFEST" in lab), None)
+        assert target is not None, f"score button not found, buttons were {labels}"
+        at.button[target].click().run()
+        assert not at.exception
+        assert len(at.dataframe) >= 2
+
+    def test_scored_table_is_sorted_by_likelihood(self, app):
+        at = AppTest.from_file(APP_PATH, default_timeout=180)
+        at.run()
+        labels = [b.label for b in at.button]
+        target = next(i for i, lab in enumerate(labels) if "SCORE ENTIRE MANIFEST" in lab)
+        at.button[target].click().run()
+        tables = [d.value for d in at.dataframe if "SurvivalProbability" in d.value.columns]
+        assert tables, "no manifest results table found"
+        # The table renders probabilities as formatted percentages, so compare
+        # the parsed numbers rather than the display strings.
+        values = [float(v.rstrip("%")) for v in tables[0]["SurvivalProbability"].tolist()]
+        assert values == sorted(values, reverse=True)
+        assert len(values) == 418
+
+    def test_download_buttons_appear_after_scoring(self, app):
+        at = AppTest.from_file(APP_PATH, default_timeout=180)
+        at.run()
+        labels = [b.label for b in at.button]
+        target = next(i for i, lab in enumerate(labels) if "SCORE ENTIRE MANIFEST" in lab)
+        at.button[target].click().run()
+        dl = [d.label for d in at.get("download_button")]
+        assert any("Kaggle-format" in lab for lab in dl)
 
 
 class TestAnalyticsTab:

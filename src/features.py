@@ -139,32 +139,36 @@ def align_to_schema(X, feature_names, strict=True):
     return aligned, missing, extra
 
 
-def encode_single_record(record_df):
+def encode_records(record_df):
     """
-    One-hot encode a one-row engineered frame against the full category universe.
+    One-hot encode an engineered frame against the full category universe.
 
     ``pd.get_dummies(..., drop_first=True)`` derives its columns from the
-    categories present in the data. On a single row that leaves exactly one
-    category, which drop_first then discards, so every dummy for that column
-    comes out zero. Scoring one passenger would therefore erase the signal
-    entirely (a "male" and a "female" record would encode identically).
-    Encoding against the explicit universe instead keeps the reference category
-    all-zero and sets the one matching dummy.
+    categories present in the data. When a slice contains a single category for
+    a column, drop_first then discards it and the corresponding indicator comes
+    out zero for every row, so the encoded value silently disagrees with training.
+    That hits single-row scoring (one passenger, one observed category) and also
+    homogeneous batches (for example a manifest of third-class passengers, all of
+    whom have Deck 'U'). Encoding against the explicit universe instead keeps the
+    reference category all-zero and sets the one matching dummy per row.
     """
-    if len(record_df) != 1:
-        raise ValueError(f"encode_single_record expects exactly 1 row, got {len(record_df)}")
-
     encoded = {}
     for column in record_df.columns:
-        value = record_df[column].iloc[0]
         if column in CATEGORICAL_COLUMNS:
-            value = str(value)
+            values = record_df[column].astype(str)
             for level in FEATURE_CATEGORIES[column][1:]:
-                encoded[f"{column}_{level}"] = 1 if value == level else 0
+                encoded[f"{column}_{level}"] = (values == level).astype(int)
         else:
-            encoded[column] = value
+            encoded[column] = record_df[column].to_numpy()
 
-    return pd.DataFrame([encoded])
+    return pd.DataFrame(encoded, index=record_df.index)
+
+
+def encode_single_record(record_df):
+    """Encode exactly one engineered row. See encode_records for the rationale."""
+    if len(record_df) != 1:
+        raise ValueError(f"encode_single_record expects exactly 1 row, got {len(record_df)}")
+    return encode_records(record_df)
 
 
 # Representative name token used to synthesise a Name for each title group.

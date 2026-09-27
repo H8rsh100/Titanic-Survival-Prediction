@@ -10,6 +10,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 
 from features import build_passenger_record
 from reports import available_figures, format_metric_rows, load_cv_results, load_metrics
+from data_prep import load_data
+from manifest import (
+    prepare_manifest, score_manifest, summarise_predictions, validate_manifest
+)
 
 st.set_page_config(
     page_title="RMS Titanic — Survival Command & Telemetry Engine",
@@ -176,7 +180,12 @@ if model is None:
     st.error("⚠️ Trained ML model artifact not found. Please run `python src/train.py` first!")
     st.stop()
 
-tabs = st.tabs(["🎫 Passenger Manifest Simulator", "🧊 Oceanic Telemetry & ML Benchmark", "📜 Technical Spec & Logs"])
+tabs = st.tabs([
+    "🎫 Passenger Manifest Simulator",
+    "🚢 Batch Manifest Scoring",
+    "🧊 Oceanic Telemetry & ML Benchmark",
+    "📜 Technical Spec & Logs",
+])
 
 with tabs[0]:
     st.markdown('<div class="ticket-card">', unsafe_allow_html=True)
@@ -276,6 +285,134 @@ with tabs[0]:
                 st.success("👶 **Child Priority**: Young boys ('Master') received preferential evacuation access.")
 
 with tabs[1]:
+    st.markdown("### 🚢 Batch Manifest Scoring")
+    st.caption(
+        "Score a whole passenger list through the same encoder the model was trained on, "
+        "rather than one passenger at a time."
+    )
+    st.markdown(
+        '<div class="ticket-card">'
+        '<div class="ticket-header">📥 Supply a Passenger Manifest</div>',
+        unsafe_allow_html=True,
+    )
+    
+    source = st.radio(
+        "Manifest source",
+        options=["Kaggle test set (bundled)", "Upload my own CSV"],
+        horizontal=True,
+    )
+    
+    uploaded = None
+    if source == "Upload my own CSV":
+        uploaded = st.file_uploader("Passenger CSV", type=["csv"], width="stretch")
+        st.caption(
+            "Required columns: `Pclass`, `Sex`, `Age`, `SibSp`, `Parch`, `Fare`, `Embarked`. "
+            "Optional: `PassengerId`, `Title` (one of Mr/Mrs/Miss/Master/Rare), `Cabin`. "
+            "A `Title` column is accepted in place of `Name`. Missing `Age` and `Fare` are "
+            "imputed from the training set."
+        )
+    else:
+        st.caption(
+            "Scores the 418 bundled test passengers. This is the same set that "
+            "`submission.csv` is generated from."
+        )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    manifest_df = None
+    if source == "Upload my own CSV":
+        if uploaded is not None:
+            try:
+                manifest_df = pd.read_csv(uploaded)
+            except Exception as exc:  # noqa: BLE001 - surface any parser failure to the user
+                st.error(f"Could not parse that file as CSV: {exc}")
+    else:
+        test_path = os.path.join("test.csv") if os.path.exists("test.csv") else os.path.join("data", "raw", "test.csv")
+        if os.path.exists(test_path):
+            manifest_df = pd.read_csv(test_path)
+        else:
+            st.warning("Bundled test set not found on disk.")
+    
+    if manifest_df is not None:
+        problems = validate_manifest(manifest_df)
+        if problems:
+            for problem in problems:
+                st.error(problem)
+        else:
+            st.success(f"Manifest accepted: {len(manifest_df)} passenger rows.")
+            if st.button("⚓ SCORE ENTIRE MANIFEST", width="stretch"):
+                with st.spinner("Encoding manifest and scoring..."):
+                    train_df, _ = load_data()
+                    aligned, engineered = prepare_manifest(manifest_df, feature_names, train_df)
+                    probs, preds = score_manifest(model, aligned)
+                    ids = (
+                        engineered["PassengerId"]
+                        if "PassengerId" in engineered.columns
+                        else pd.RangeIndex(1, len(engineered) + 1)
+                    )
+                    summary = summarise_predictions(probs, preds, ids)
+                
+                st.session_state["manifest_summary"] = summary
+                rescued = int(summary["Survived"].sum())
+                rate = float(summary["SurvivalProbability"].mean())
+                card_cols = st.columns(4)
+                with card_cols[0]:
+                    st.markdown(
+                        f'<div class="metric-badge"><div class="metric-val">{len(summary)}</div>'
+                        '<div class="metric-lbl">Passengers Scored</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                with card_cols[1]:
+                    st.markdown(
+                        f'<div class="metric-badge"><div class="metric-val">{rescued}</div>'
+                        '<div class="metric-lbl">Rescued</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                with card_cols[2]:
+                    st.markdown(
+                        f'<div class="metric-badge"><div class="metric-val">{len(summary) - rescued}</div>'
+                        '<div class="metric-lbl">Perished</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                with card_cols[3]:
+                    st.markdown(
+                        f'<div class="metric-badge"><div class="metric-val">{rate:.1%}</div>'
+                        '<div class="metric-lbl">Mean Survival Odds</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                view = summary.copy()
+                view["SurvivalProbability"] = view["SurvivalProbability"].map("{:.2%}".format)
+                st.dataframe(
+                    view,
+                    width="stretch",
+                    hide_index=True,
+                    height=420,
+                    column_config={
+                        "PassengerId": st.column_config.NumberColumn("Passenger ID"),
+                        "SurvivalProbability": st.column_config.TextColumn("Survival Odds"),
+                        "Survived": st.column_config.NumberColumn("Survived (0/1)"),
+                        "Outcome": st.column_config.TextColumn("Outcome"),
+                    },
+                )
+                
+                kaggle_cols = ["PassengerId", "Survived"]
+                st.download_button(
+                    "⬇️ Download Kaggle-format CSV",
+                    summary[kaggle_cols].to_csv(index=False).encode("utf-8"),
+                    file_name="manifest_predictions.csv",
+                    mime="text/csv",
+                    width="stretch",
+                )
+                st.download_button(
+                    "⬇️ Download full table with probabilities",
+                    summary.to_csv(index=False).encode("utf-8"),
+                    file_name="manifest_predictions_detailed.csv",
+                    mime="text/csv",
+                )
+
+with tabs[2]:
     st.markdown("### 🧊 Oceanic Model Performance & Analytics")
     st.caption("Live figures and numbers read straight from the artefacts written by the last pipeline run.")
     
@@ -353,7 +490,7 @@ with tabs[1]:
         if os.path.exists("assets/iceberg.png"):
             st.image("assets/iceberg.png", caption="North Atlantic Oceanic Environment", width=260)
 
-with tabs[2]:
+with tabs[3]:
     st.markdown("### 📜 System Architecture & Technical Specifications")
     spec = {
         "System Name": "RMS Titanic Survival Prediction Engine",

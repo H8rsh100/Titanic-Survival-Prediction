@@ -9,6 +9,7 @@ import streamlit as st
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 from features import build_passenger_record
+from reports import available_figures, format_metric_rows, load_cv_results, load_metrics
 
 st.set_page_config(
     page_title="RMS Titanic — Survival Command & Telemetry Engine",
@@ -202,7 +203,7 @@ with tabs[0]:
 
     st.markdown('</div>', unsafe_allow_html=True)
     
-    if st.button("🚨 SIMULATE RESCUE SURVIVAL PROBABILITY", use_container_width=True):
+    if st.button("🚨 SIMULATE RESCUE SURVIVAL PROBABILITY", width="stretch"):
         input_df, engineered = build_passenger_record(
             feature_names,
             pclass=pclass,
@@ -276,28 +277,101 @@ with tabs[0]:
 
 with tabs[1]:
     st.markdown("### 🧊 Oceanic Model Performance & Analytics")
+    st.caption("Live figures and numbers read straight from the artefacts written by the last pipeline run.")
     
-    col_img1, col_img2 = st.columns(2)
-    with col_img1:
+    metrics = load_metrics()
+    cv_results = load_cv_results()
+    figures = available_figures()
+    
+    if metrics is None and cv_results is None:
+        st.info(
+            "📉 No benchmark artefacts found yet. Run `python src/train.py` to generate "
+            "`reports/metrics.json`, `reports/cv_results.csv` and the figures below."
+        )
+    else:
+        if metrics:
+            metric_rows = format_metric_rows(metrics.get("oof_metrics", {}))
+            if metric_rows:
+                resub = metrics.get("resubstitution_metrics", {}).get("Accuracy")
+                st.markdown("#### Out-of-Fold Performance")
+                st.caption(
+                    "Measured with `cross_val_predict`, so every prediction comes from a model "
+                    "that never saw that row."
+                    + (f" Resubstitution accuracy is {resub:.2%}, which is not a "
+                       "generalisation estimate." if isinstance(resub, float) else "")
+                )
+                card_cols = st.columns(len(metric_rows))
+                for col, (label, value) in zip(card_cols, metric_rows):
+                    with col:
+                        st.markdown(
+                            f'<div class="metric-badge"><div class="metric-val">{value:.2%}</div>'
+                            f'<div class="metric-lbl">{label}</div></div>',
+                            unsafe_allow_html=True,
+                        )
+                st.markdown("<br>", unsafe_allow_html=True)
+        
+        if cv_results is not None:
+            st.markdown("#### Model Benchmark")
+            st.caption(
+                "5-Fold Stratified CV across all 891 training rows. Per-fold scores are in "
+                "`reports/cv_results.csv`."
+            )
+            display_df = cv_results.copy()
+            for col in ["Mean_CV_Accuracy", "Std_Dev"] + [
+                c for c in display_df.columns if c.startswith("Fold")
+            ]:
+                if col in display_df.columns:
+                    display_df[col] = display_df[col].map("{:.2%}".format)
+            st.dataframe(
+                display_df,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Model": st.column_config.TextColumn("Model", width="medium"),
+                    "Mean_CV_Accuracy": st.column_config.TextColumn("Mean CV Accuracy"),
+                    "Std_Dev": st.column_config.TextColumn("Std Dev"),
+                },
+            )
+        
+        st.markdown("#### Generated Figures")
+        figure_captions = {
+            "cv_model_comparison": "5-Fold Stratified Cross-Validation Benchmark",
+            "roc_pr_curves": "ROC and Precision-Recall Curves (out-of-fold)",
+            "threshold_sweep": "Decision Threshold Sweep",
+            "feature_importance": "Top Feature Importances (tree ensemble)",
+            "confusion_matrix": "Confusion Matrix (out-of-fold)",
+        }
+        plot_order = [key for key in figure_captions if key in figures]
+        if not plot_order:
+            st.caption("No figures found. Run `python src/train.py` to generate them.")
+        for chunk_start in range(0, len(plot_order), 2):
+            chunk = plot_order[chunk_start:chunk_start + 2]
+            for col, key in zip(st.columns(len(chunk)), chunk):
+                with col:
+                    st.image(figures[key], caption=figure_captions[key])
+        
         if os.path.exists("assets/iceberg.png"):
-            st.image("assets/iceberg.png", caption="North Atlantic Oceanic Environment")
-        if os.path.exists("reports/figures/cv_model_comparison.png"):
-            st.image("reports/figures/cv_model_comparison.png", caption="5-Fold Stratified Cross-Validation Benchmark")
-            
-    with col_img2:
-        if os.path.exists("reports/figures/feature_importance.png"):
-            st.image("reports/figures/feature_importance.png", caption="Top Feature Importances (Tree Ensemble)")
-        if os.path.exists("reports/figures/confusion_matrix.png"):
-            st.image("reports/figures/confusion_matrix.png", caption="Confusion Matrix — Soft Voting Ensemble")
+            st.image("assets/iceberg.png", caption="North Atlantic Oceanic Environment", width=260)
 
 with tabs[2]:
     st.markdown("### 📜 System Architecture & Technical Specifications")
-    st.json({
+    spec = {
         "System Name": "RMS Titanic Survival Prediction Engine",
-        "Primary Model": "Soft Voting Classifier Ensemble",
+        "Primary Model": "Voting Classifier Ensemble",
         "Ensemble Sub-Models": ["Random Forest", "Tuned Gradient Boosting", "Extra Trees", "Support Vector Classifier", "Logistic Regression"],
-        "Cross-Validation Benchmark": "84.17% Mean Stratified CV Accuracy",
         "Dataset Folds": "5-Fold Stratified K-Fold",
         "Engineered Features": ["Title Extraction", "FamilySize", "IsAlone", "SmallFamily", "LargeFamily", "HasCabin", "Deck Level", "Fare Log-Transform"],
-        "Target Variable": "Survived (0 = Perished, 1 = Rescued)"
-    })
+        "Target Variable": "Survived (0 = Perished, 1 = Rescued)",
+    }
+    if metrics:
+        oof = metrics.get("oof_metrics", {})
+        spec["Selected Model"] = metrics.get("selected_model", spec["Primary Model"])
+        spec["Cross-Validation Benchmark"] = f"{metrics.get('cv_mean_accuracy', 0):.2%} mean accuracy"
+        spec["Cross-Validation Std Dev"] = f"+/- {metrics.get('cv_std_accuracy', 0):.2%}"
+        if "ROC-AUC" in oof:
+            spec["Out-of-Fold ROC-AUC"] = f"{oof['ROC-AUC']:.4f}"
+        spec["Training Rows"] = metrics.get("n_train")
+        spec["Test Rows"] = metrics.get("n_test")
+    else:
+        spec["Cross-Validation Benchmark"] = "Run `python src/train.py` to populate"
+    st.json(spec)

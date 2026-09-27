@@ -13,10 +13,27 @@ matplotlib.use("Agg")
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(REPO_ROOT, "src")
-DATA_RAW_DIR = os.path.join(REPO_ROOT, "data", "raw")
 
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
+
+
+def resolve_data_dir():
+    """Locate the raw CSVs the same way src/data_prep.py does.
+
+    data/raw/ is a gitignored working copy, so on a fresh clone only the tracked
+    root copies exist. Without this fallback the data backed tests would skip in
+    CI and the suite would report green while checking almost nothing.
+    """
+    for candidate in (os.path.join(REPO_ROOT, "data", "raw"), REPO_ROOT):
+        if os.path.exists(os.path.join(candidate, "train.csv")) and os.path.exists(
+            os.path.join(candidate, "test.csv")
+        ):
+            return candidate
+    return os.path.join(REPO_ROOT, "data", "raw")
+
+
+DATA_DIR = resolve_data_dir()
 
 
 @pytest.fixture(scope="session")
@@ -25,12 +42,17 @@ def repo_root():
 
 
 @pytest.fixture(scope="session")
+def data_dir():
+    return DATA_DIR
+
+
+@pytest.fixture(scope="session")
 def raw_data():
     """Return the untouched (train, test) frames straight off disk."""
     import pandas as pd
 
-    train_path = os.path.join(DATA_RAW_DIR, "train.csv")
-    test_path = os.path.join(DATA_RAW_DIR, "test.csv")
+    train_path = os.path.join(DATA_DIR, "train.csv")
+    test_path = os.path.join(DATA_DIR, "test.csv")
     if not (os.path.exists(train_path) and os.path.exists(test_path)):
         pytest.skip("Raw Titanic CSVs are unavailable, skipping data backed tests.")
 

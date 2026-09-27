@@ -19,3 +19,16 @@ ENV/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Raw dataset: the canonical copy is tracked at the repo root (Kaggle convention),
+# so data/raw/ is a gitignored working copy. src/data_prep.py prefers data/raw/
+# and falls back to the root files, so a fresh clone still runs.
+data/raw/*.csv
+
+# Generated artefacts that duplicate a tracked file at the repo root.
+data/processed/submission.csv
+
+# Test and tooling caches
+.pytest_cache/
+.coverage
+htmlcov/

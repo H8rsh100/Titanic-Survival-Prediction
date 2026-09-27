@@ -61,7 +61,7 @@ def validate_submission_frame(submission_df, expected_ids=None, expected_rows=EX
 def generate_predictions(
     model_path="models/best_model.pkl",
     output_csv="submission.csv",
-    mirror_path="data/processed/submission.csv",
+    mirror_path=None,
     expected_ids=None,
     verbose=True,
 ):
@@ -146,9 +146,13 @@ def main(argv=None):
         "--output", default="submission.csv", help="Destination CSV for Kaggle upload."
     )
     parser.add_argument(
-        "--no-mirror",
-        action="store_true",
-        help="Skip writing the copy under data/processed/.",
+        "--mirror",
+        nargs="?",
+        const="data/processed/submission.csv",
+        default=None,
+        help="Also write a copy to this path (defaults to data/processed/submission.csv "
+             "when the flag is given with no value). Off by default so the submission "
+             "exists in exactly one place.",
     )
     args = parser.parse_args(argv)
 
@@ -156,7 +160,7 @@ def main(argv=None):
     generate_predictions(
         model_path=args.model,
         output_csv=args.output,
-        mirror_path=None if args.no_mirror else "data/processed/submission.csv",
+        mirror_path=args.mirror,
         expected_ids=test_df["PassengerId"].to_numpy(),
     )
     return 0

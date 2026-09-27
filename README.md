@@ -57,7 +57,7 @@ Full numbers, tuned hyperparameters and the CV benchmark table land in `reports/
 ```
 titanic-survival-prediction/
 ├── data/
-│   ├── raw/                # train.csv, test.csv, gender_submission.csv
+│   ├── raw/                # Working copy of the Kaggle CSVs (gitignored, see below)
 │   └── processed/          # Engineered train/test datasets
 ├── notebooks/
 │   └── 01_eda_to_model.ipynb # Complete narrative EDA & ML notebook
@@ -86,6 +86,9 @@ titanic-survival-prediction/
 │   └── workflows/
 │       └── ci.yml          # Automated test + import check on every push
 ├── app.py                  # Streamlit Interactive Survival Simulator App
+├── train.csv               # Canonical raw dataset (Kaggle convention, tracked)
+├── test.csv
+├── gender_submission.csv
 ├── submission.csv          # Kaggle-ready submission file (418 test records)
 ├── requirements.txt        # Python package dependencies
 ├── requirements-dev.txt    # Test/CI-only dependencies
@@ -111,11 +114,13 @@ Execute full data prep, feature engineering, model tuning, and evaluation:
 python src/train.py
 ```
 
+**Where the data lives.** The raw CSVs are tracked exactly once, at the repo root, following the Kaggle convention, so a fresh clone runs with no setup. `data/raw/` is a gitignored working copy: `src/data_prep.py` prefers `data/raw/` when it exists and falls back to the root files otherwise, so dropping the Kaggle download in either place works. `submission.csv` likewise exists only at the root.
+
 ### 3. Generate Kaggle Submission File
 ```bash
 python src/predict.py
 ```
-This produces `submission.csv` containing binary survival predictions formatted for Kaggle upload.
+This produces `submission.csv` containing binary survival predictions formatted for Kaggle upload. Use `--output PATH` to write elsewhere, or `--mirror` to also keep a copy under `data/processed/`.
 
 ### 4. Launch Interactive Web App Dashboard
 ```bash

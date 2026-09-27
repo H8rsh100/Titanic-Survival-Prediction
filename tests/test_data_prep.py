@@ -10,15 +10,23 @@ from data_prep import impute_missing, load_data
 
 
 class TestLoadData:
-    def test_returns_expected_shapes(self, repo_root):
-        train, test = load_data(os.path.join(repo_root, "data", "raw"))
+    def test_returns_expected_shapes(self, data_dir):
+        train, test = load_data(data_dir)
         assert train.shape == (891, 12)
         assert test.shape == (418, 11)
 
-    def test_train_has_target_and_test_does_not(self, repo_root):
-        train, test = load_data(os.path.join(repo_root, "data", "raw"))
+    def test_train_has_target_and_test_does_not(self, data_dir):
+        train, test = load_data(data_dir)
         assert "Survived" in train.columns
         assert "Survived" not in test.columns
+
+    def test_falls_back_to_the_repo_root_when_data_raw_is_absent(self, repo_root, data_dir):
+        """A fresh clone only has the tracked root copies, so the loader must find them."""
+        if os.path.abspath(data_dir) == os.path.abspath(repo_root):
+            pytest.skip("data/raw is unavailable, so this is already the fallback path.")
+        train, test = load_data()
+        assert len(train) == 891
+        assert len(test) == 418
 
     def test_loader_does_not_mutate_inputs(self, raw_data):
         train, test = raw_data

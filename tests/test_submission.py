@@ -34,8 +34,8 @@ class TestSubmissionContract:
     def test_passenger_ids_are_unique(self, submission):
         assert submission["PassengerId"].is_unique
 
-    def test_ids_align_with_the_raw_test_split_order(self, submission, repo_root):
-        test_path = os.path.join(repo_root, "data", "raw", "test.csv")
+    def test_ids_align_with_the_raw_test_split_order(self, submission, data_dir):
+        test_path = os.path.join(data_dir, "test.csv")
         if not os.path.exists(test_path):
             pytest.skip("Raw test split unavailable.")
         expected = pd.read_csv(test_path)["PassengerId"]

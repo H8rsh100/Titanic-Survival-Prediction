@@ -8,12 +8,14 @@ import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
-from features import build_passenger_record
+from features import build_passenger_record, prepare_modeling_data
+from data_prep import impute_missing, load_data
 from reports import available_figures, format_metric_rows, load_cv_results, load_metrics
-from data_prep import load_data
 from manifest import (
     prepare_manifest, score_manifest, summarise_predictions, validate_manifest
 )
+from explain import feature_drivers, nearest_passengers
+
 
 st.set_page_config(
     page_title="RMS Titanic — Survival Command & Telemetry Engine",
@@ -165,6 +167,16 @@ def load_pipeline():
     data = joblib.load(model_path)
     return data['model'], data['feature_names']
 
+
+@st.cache_resource
+def load_training_context():
+    """Encoded training matrix plus the engineered frame, used for explanations."""
+    train_df, _ = load_data()
+    train_c, _ = impute_missing(train_df, train_df)
+    X_train, y_train, _, _, _, train_eng, _ = prepare_modeling_data(train_c, train_c)
+    return X_train, y_train, train_eng
+
+
 model, feature_names = load_pipeline()
 
 # Hero Header Card
@@ -179,6 +191,8 @@ st.markdown("""
 if model is None:
     st.error("⚠️ Trained ML model artifact not found. Please run `python src/train.py` first!")
     st.stop()
+
+X_train, y_train, train_eng = load_training_context()
 
 tabs = st.tabs([
     "🎫 Passenger Manifest Simulator",
@@ -283,6 +297,75 @@ with tabs[0]:
                 st.warning("⚠️ **Steerage Warning**: 3rd Class passengers faced severe delays reaching upper boat decks through flooded watertight compartments.")
             elif title == "Master":
                 st.success("👶 **Child Priority**: Young boys ('Master') received preferential evacuation access.")
+            
+            st.markdown("#### 🔍 Why this outcome")
+            driver_col, neighbour_col = st.columns([1, 1.25])
+            
+            with driver_col:
+                st.markdown("**What moved the odds**")
+                st.caption(
+                    "Log-odds contribution versus the average training passenger. "
+                    "Negative pushes toward perishing, positive toward being rescued."
+                )
+                try:
+                    drivers = feature_drivers(model, X_train, input_df)
+                    driver_view = drivers.copy()
+                    driver_view["Value"] = driver_view["Value"].map(
+                        lambda v: f"{v:g}"
+                    )
+                    driver_view["Contribution"] = driver_view["Contribution"].map(
+                        lambda v: f"{v:+.2f}"
+                    )
+                    st.dataframe(
+                        driver_view,
+                        width="stretch",
+                        hide_index=True,
+                        height=300,
+                        column_config={
+                            "Feature": st.column_config.TextColumn("Feature"),
+                            "Value": st.column_config.TextColumn("Value"),
+                            "Contribution": st.column_config.TextColumn("Effect"),
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    st.caption(f"Driver breakdown unavailable: {exc}")
+            
+            with neighbour_col:
+                st.markdown("**Closest historical passengers**")
+                st.caption(
+                    "Real training rows nearest in encoded feature space, and what happened to them."
+                )
+                try:
+                    neighbours = nearest_passengers(
+                        X_train, y_train, train_eng, input_df, k=8
+                    )
+                    survived = int(neighbours["Survived"].sum())
+                    rate = survived / len(neighbours)
+                    st.markdown(
+                        f'<div class="metric-badge"><div class="metric-val">{survived}/{len(neighbours)}</div>'
+                        f'<div class="metric-lbl">Nearest Neighbours Rescued ({rate:.0%})</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    neighbour_view = neighbours[
+                        ["PassengerId", "Sex", "Pclass", "Age", "Survived", "Similarity"]
+                    ].copy()
+                    neighbour_view["Age"] = neighbour_view["Age"].map(lambda v: f"{v:g}")
+                    neighbour_view["Similarity"] = neighbour_view["Similarity"].map(
+                        lambda v: f"{v:.2f}"
+                    )
+                    st.dataframe(
+                        neighbour_view,
+                        width="stretch",
+                        hide_index=True,
+                        height=248,
+                        column_config={
+                            "PassengerId": st.column_config.NumberColumn("ID"),
+                            "Similarity": st.column_config.TextColumn("Similarity"),
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    st.caption(f"Neighbour lookup unavailable: {exc}")
 
 with tabs[1]:
     st.markdown("### 🚢 Batch Manifest Scoring")

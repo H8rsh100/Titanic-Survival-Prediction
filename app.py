@@ -15,6 +15,7 @@ from manifest import (
     prepare_manifest, score_manifest, summarise_predictions, validate_manifest
 )
 from explain import feature_drivers, nearest_passengers
+from sensitivity import SWEEPS, sensitivity_curve
 
 
 st.set_page_config(
@@ -227,6 +228,17 @@ with tabs[0]:
     st.markdown('</div>', unsafe_allow_html=True)
     
     if st.button("🚨 SIMULATE RESCUE SURVIVAL PROBABILITY", width="stretch"):
+        base_kwargs = dict(
+            pclass=pclass,
+            sex=sex,
+            age=float(age),
+            title=title,
+            sibsp=int(sibsp),
+            parch=int(parch),
+            fare=float(fare),
+            embarked=embarked_code,
+            cabin=cabin,
+        )
         input_df, engineered = build_passenger_record(
             feature_names,
             pclass=pclass,
@@ -366,6 +378,82 @@ with tabs[0]:
                     )
                 except Exception as exc:  # noqa: BLE001
                     st.caption(f"Neighbour lookup unavailable: {exc}")
+
+            st.markdown("#### 🔁 What-if analysis")
+            st.caption(
+                "Sweep one attribute with everything else held fixed to see how far "
+                "the outcome can actually move."
+            )
+            sweep_options = list(SWEEPS)
+            sweep_col, sweep_btn_col = st.columns([2, 1])
+            with sweep_col:
+                chosen_sweep = st.selectbox(
+                    "Vary this attribute", sweep_options, key="sim_sweep"
+                )
+            with sweep_btn_col:
+                st.write("")
+                st.write("")
+                run_sweep = st.button(
+                    "Run What-If", key="run_sweep", type="secondary", width="stretch"
+                )
+            if run_sweep:
+                try:
+                    curve, base_p = sensitivity_curve(
+                        model, feature_names, base_kwargs, chosen_sweep
+                    )
+                    st.session_state["sim_sweep_curve"] = (chosen_sweep, curve, base_p)
+                except Exception as exc:  # noqa: BLE001
+                    st.warning(f"What-if analysis failed: {exc}")
+
+            if "sim_sweep_curve" in st.session_state:
+                shown_sweep, curve, base_p = st.session_state["sim_sweep_curve"]
+                if shown_sweep != chosen_sweep:
+                    st.caption(
+                        f"Showing results for **{shown_sweep}**. "
+                        f"Press **Run What-If** to sweep **{chosen_sweep}**."
+                    )
+                best = curve.loc[curve["SurvivalProbability"].idxmax()]
+                worst = curve.loc[curve["SurvivalProbability"].idxmin()]
+                spread = best["SurvivalProbability"] - worst["SurvivalProbability"]
+
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Base probability", f"{base_p:.1%}")
+                c2.metric("Best case", f"{best['SurvivalProbability']:.1%}",
+                          f"at {shown_sweep}={best['Value']}")
+                c3.metric("Worst case", f"{worst['SurvivalProbability']:.1%}",
+                          f"at {shown_sweep}={worst['Value']}")
+
+                if spread < 0.02:
+                    st.info(
+                        f"🔍 The model's verdict barely moves across {shown_sweep}, "
+                        f"so this attribute is not what decides the outcome for this passenger."
+                    )
+                else:
+                    st.success(
+                        f"🎯 {shown_sweep} matters a lot here: sweeping it changes the "
+                        f"prediction by {spread:.1%}."
+                    )
+
+                st.dataframe(
+                    curve.assign(
+                        Value=curve["Value"].map(lambda v: f"{v:g}"),
+                        SurvivalProbability=curve["SurvivalProbability"].map(
+                            lambda v: f"{v:.2%}"
+                        ),
+                        Delta=curve["Delta"].map(lambda v: f"{v:+.2%}"),
+                    ).rename(columns={
+                        "Value": shown_sweep,
+                        "SurvivalProbability": "Rescued",
+                        "Delta": "Change",
+                    }),
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        shown_sweep: st.column_config.TextColumn(shown_sweep),
+                        "Rescued": st.column_config.TextColumn("Rescued"),
+                        "Change": st.column_config.TextColumn("Change"),
+                    },
+                )
 
 with tabs[1]:
     st.markdown("### 🚢 Batch Manifest Scoring")
